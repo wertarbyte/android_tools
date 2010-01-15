@@ -1,0 +1,25 @@
+#!/system/bin/sh
+#
+# Executes commands from a chroot environment
+
+# location of (debian) chroot
+DEB=/system/sd/debian
+
+PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/system/xbin/bb:/data/local/bin"
+
+mounted() {
+  awk -vDIR=$1 '$2 == DIR { MOUNTED=1;} END {exit ! MOUNTED;}' /proc/mounts
+}
+
+mounted $DEB/proc    || mount proc -t proc $DEB/proc
+mounted $DEB/sys     || mount sysfs -t sysfs $DEB/sys
+mounted $DEB/dev     || mount --rbind /dev $DEB/dev
+mounted $DEB/dev/pts || mount devpts -t devpts $DEB/dev/pts
+
+SHELL=/bin/bash
+HOME=/root
+export SHELL
+export HOME
+
+chroot $DEB ${*:-$SHELL -l}
+
