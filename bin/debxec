@@ -16,10 +16,17 @@ swap_active() {
   awk -vSWAP=$1 'NR>1 && $1 == SWAP { ACTIVE=1;} END {exit ! ACTIVE;}' /proc/swaps
 }
 
-apps_still_running() {
+issubdir() {
+  len="$(echo -n xx"$2" | wc -c)"
+  [ "$(echo xx"$1"|cut -b 3-"$len")" = "$(echo xx"$2"|cut -b 3-"$len")" \
+    -a \
+  x"$(ls -id /"$2" | grep -Eo '[0-9]+')" = x"$(ls -id "$(echo x"$1"|cut -b 2-"$len")" | grep -Eo '[0-9]+')" ]
+}
+
+no_apps_running() {
   for l in /proc/*/root; do
-    readlink $l
-  done | grep -q "^$DEB"
+    issubdir "$(readlink "$l")" "$DEV" && return 1
+  done
 }
 
 mounted $DEB/proc    || mount proc -t proc $DEB/proc
@@ -41,5 +48,5 @@ chroot $DEB ${*:-$SHELL -l}
 
 # deactivate swap if no apps left
 swap_active "$SWAPFILE" && \
-  ! apps_still_running && \
+  no_apps_running && \
   swapoff $SWAPFILE
