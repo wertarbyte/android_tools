@@ -4,6 +4,7 @@
 
 # location of (debian) chroot
 DEB=/system/sd/debian
+SWAPFILE=/system/sd/swapfile
 
 PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/system/xbin/bb:/data/local/bin"
 
@@ -11,10 +12,25 @@ mounted() {
   awk -vDIR=$1 '$2 == DIR { MOUNTED=1;} END {exit ! MOUNTED;}' /proc/mounts
 }
 
+swap_active() {
+  awk -vSWAP=$1 'NR>1 && $1 == SWAP { ACTIVE=1;} END {exit ! ACTIVE;}' /proc/swaps
+}
+
+apps_still_running() {
+  for l in /proc/*/root; do
+    readlink $l
+  done | grep -q "^$DEB"
+}
+
 mounted $DEB/proc    || mount proc -t proc $DEB/proc
 mounted $DEB/sys     || mount sysfs -t sysfs $DEB/sys
 mounted $DEB/dev     || mount --rbind /dev $DEB/dev
 mounted $DEB/dev/pts || mount devpts -t devpts $DEB/dev/pts
+
+# activate swap if specified
+[ -e "$SWAPFILE" ] && \
+  ! swap_active "$SWAPFILE" && \
+  swapon "$SWAPFILE"
 
 SHELL=/bin/bash
 HOME=/root
@@ -23,3 +39,7 @@ export HOME
 
 chroot $DEB ${*:-$SHELL -l}
 
+# deactivate swap if no apps left
+swap_active "$SWAPFILE" && \
+  ! apps_still_running && \
+  swapoff $SWAPFILE
