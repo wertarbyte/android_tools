@@ -2,7 +2,7 @@
 #
 # Executes commands from a chroot environment
 
-# location of (debian) chroot
+# location of (debian) chroot (without trailing /)
 DEB=/system/sd/debian
 SWAPFILE=/system/sd/swapfile
 
@@ -16,17 +16,25 @@ swap_active() {
   awk -vSWAP=$1 'NR>1 && $1 == SWAP { ACTIVE=1;} END {exit ! ACTIVE;}' /proc/swaps
 }
 
-issubdir() {
-  len="$(echo -n xx"$2" | wc -c)"
-  [ "$(echo xx"$1"|cut -b 3-"$len")" = "$(echo xx"$2"|cut -b 3-"$len")" \
-    -a \
-  x"$(ls -id /"$2" | grep -Eo '[0-9]+')" = x"$(ls -id "$(echo x"$1"|cut -b 2-"$len")" | grep -Eo '[0-9]+')" ]
+is_subdir() {
+  DIR="$1"
+  BASE="$2"
+  [ "$DIR" = "$BASE" ] && return 0
+  
+  LEN=$(echo -n "$BASE" | wc -c)
+  PARTDIR=$( echo "$DIR" | cut -c -$((${LEN}+1)) )
+  [ "$PARTDIR" = "${BASE}/" ] && return 0
+  
+  return 1;
 }
 
 no_apps_running() {
   for l in /proc/*/root; do
-    issubdir "$(readlink "$l")" "$DEV" && return 1
+    ROOT=$(readlink "$l")
+    # is the program / part of the chroot?
+    is_subdir "$ROOT" "$DEB" && return 1
   done
+  return 0
 }
 
 mounted $DEB/proc    || mount proc -t proc $DEB/proc
@@ -49,4 +57,4 @@ chroot $DEB ${*:-$SHELL -l}
 # deactivate swap if no apps left
 swap_active "$SWAPFILE" && \
   no_apps_running && \
-  swapoff $SWAPFILE
+  swapoff "$SWAPFILE"
