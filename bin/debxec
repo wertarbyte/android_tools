@@ -16,13 +16,21 @@ swap_active() {
   awk -vSWAP=$1 'NR>1 && $1 == SWAP { ACTIVE=1;} END {exit ! ACTIVE;}' /proc/swaps
 }
 
+gen_pattern() {
+  local i=$1
+  while [ $i -gt 0 ]; do
+    echo -n '?'
+    i=$(($i-1))
+  done
+}
+
 is_subdir() {
   local DIR="$1"
   local BASE="$2"
   [ "$DIR" = "$BASE" ] && return 0
   
-  local LEN=$(echo -n "$BASE" | wc -c)
-  local PARTDIR=$( echo "$DIR" | cut -c -$((${LEN}+1)) )
+  local OFFSET=$(( ${#DIR} - ${#BASE} - 1 ))
+  local PARTDIR=${DIR%$(gen_pattern $OFFSET)}
   [ "$PARTDIR" = "${BASE}/" ] && return 0
   
   return 1;
