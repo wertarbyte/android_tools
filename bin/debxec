@@ -17,12 +17,12 @@ swap_active() {
 }
 
 is_subdir() {
-  DIR="$1"
-  BASE="$2"
+  local DIR="$1"
+  local BASE="$2"
   [ "$DIR" = "$BASE" ] && return 0
   
-  LEN=$(echo -n "$BASE" | wc -c)
-  PARTDIR=$( echo "$DIR" | cut -c -$((${LEN}+1)) )
+  local LEN=$(echo -n "$BASE" | wc -c)
+  local PARTDIR=$( echo "$DIR" | cut -c -$((${LEN}+1)) )
   [ "$PARTDIR" = "${BASE}/" ] && return 0
   
   return 1;
@@ -30,7 +30,7 @@ is_subdir() {
 
 no_apps_running() {
   for l in /proc/*/root; do
-    ROOT=$(readlink "$l")
+    local ROOT=$(readlink "$l")
     # is the program / part of the chroot?
     is_subdir "$ROOT" "$DEB" && return 1
   done
