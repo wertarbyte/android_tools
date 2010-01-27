@@ -1,0 +1,4 @@
+# make vfat partition accessible to chroot
+/sdcard         /android/sdcard
+# and user data as well
+/data           /android/data
