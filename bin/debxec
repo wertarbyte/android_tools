@@ -2,21 +2,24 @@
 #
 # Executes commands from a chroot environment
 
+## default configuration values, changable via config file
 # location of (debian) chroot (without trailing /)
-DEB=/system/sd/debian
-SWAPFILE=/system/sd/swapfile
+ROOT=/system/sd/debian
+SWAP=/system/sd/swapfile
 # configuration file with directories to bind-mount into the chroot
 BINDTAB=/system/sd/bindtab
 
 # put all chroot processes into a process group
-CGROUP="debxec"
-CGROUP_DIR="/dev/cpuctl"
+CGROUP_NAME="debxec"
+# mounpoint of cgroup fs
+CGROUP_BASE="/dev/cpuctl"
 
+# determine the full path to this script
 MYSELF="$(realpath $0)"
 
 PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/system/xbin/bb:/data/local/bin"
 
-CHROOT="chroot"
+CHROOT_CMD="chroot"
 
 # source config files
 CONF_FILES="/data/local/etc/debxec.defaults /system/sd/debxec.defaults $HOME/.debxec.defaults"
@@ -54,25 +57,26 @@ is_subdir() {
 
 no_apps_running() {
   for l in /proc/*/root; do
-    local ROOT=$(readlink "$l")
+    # root directory of the inspected process
+    local PROOT=$(readlink "$l")
     # is the program / part of the chroot?
-    is_subdir "$ROOT" "$DEB" && return 1
+    is_subdir "$PROOT" "$ROOT" && return 1
   done
   return 0
 }
 
 build_chroot() {
     # mount essential file systems into the chroot
-    mounted $DEB/proc    || mount proc -t proc $DEB/proc
-    mounted $DEB/sys     || mount sysfs -t sysfs $DEB/sys
-    mounted $DEB/dev     || mount --rbind /dev $DEB/dev
-    mounted $DEB/dev/pts || mount devpts -t devpts $DEB/dev/pts
+    mounted $ROOT/proc    || mount proc -t proc $ROOT/proc
+    mounted $ROOT/sys     || mount sysfs -t sysfs $ROOT/sys
+    mounted $ROOT/dev     || mount --rbind /dev $ROOT/dev
+    mounted $ROOT/dev/pts || mount devpts -t devpts $ROOT/dev/pts
     # bind mount custom directories
     if [ -e "$BINDTAB" ]; then
       # remove comments
       sed 's!#.*$!!;/^[[:space:]]*$/d;' "$BINDTAB" | \
       while read SRC DST; do
-        mounted ${DEB}${DST} || mount --rbind "$SRC" "${DEB}${DST}"
+        mounted ${ROOT}${DST} || mount --rbind "$SRC" "${ROOT}${DST}"
       done
     fi
 }
@@ -80,7 +84,7 @@ build_chroot() {
 teardown_chroot() {
     # unmount all file systems beneath the chroot
     tac /proc/mounts | while read DEV DIR FS OPTS X Y; do
-        if is_subdir "$DIR" "$DEB"; then
+        if is_subdir "$DIR" "$ROOT"; then
             umount "$DIR"
         fi
     done
@@ -88,26 +92,26 @@ teardown_chroot() {
 
 enter_cgroup() {
     # enter process group
-    if mounted "${CGROUP_DIR}"; then
-        local MYGROUP="${CGROUP_DIR}/$CGROUP"
+    if mounted "${CGROUP_BASE}"; then
+        local MYGROUP="${CGROUP_BASE}/$CGROUP_NAME"
         # create group if it does not exist
         [ -d "$MYGROUP" ] || mkdir "$MYGROUP"
         echo $$ > "$MYGROUP/tasks"
         echo 1 > "$MYGROUP/notify_on_release"
         # install cleanup handler
         if [ -x "$MYSELF" ]; then
-            echo $MYSELF > "${CGROUP_DIR}/release_agent"
+            echo $MYSELF > "${CGROUP_BASE}/release_agent"
         fi
     else
-        echo "Unable to enter process group, ${CGROUP_DIR} not mounted" >&2
+        echo "Unable to enter process group, ${CGROUP_BASE} not mounted" >&2
     fi
 }
 
 cleanup() {
     # deactivate swap and unmount if no apps left
     if no_apps_running; then
-        swap_active "$SWAPFILE" && \
-            swapoff "$SWAPFILE"
+        swap_active "$SWAP" && \
+            swapoff "$SWAP"
         teardown_chroot
     fi
 }
@@ -119,9 +123,8 @@ fi
 
 # if we are called with our process group name
 # as the only argument, we should start cleaning up
-log "debxec: $*"
-if [ "$1" = "/$CGROUP" ] && [ ! -e "$DEB/$1" ]; then
-    log "Cleaning up debian chroot"
+if [ "$1" = "/${CGROUP_NAME}" ] && [ ! -e "$ROOT/$1" ]; then
+    log "Cleaning up chroot"
     cleanup
     exit $?
 fi
@@ -129,9 +132,9 @@ fi
 build_chroot
 
 # activate swap if specified
-[ -e "$SWAPFILE" ] && \
-  ! swap_active "$SWAPFILE" && \
-  swapon "$SWAPFILE"
+[ -e "$SWAP" ] && \
+  ! swap_active "$SWAP" && \
+  swapon "$SWAP"
 
 # enter process group
 enter_cgroup
@@ -141,6 +144,6 @@ HOME=/root
 export SHELL
 export HOME
 
-$CHROOT $DEB ${*:-$SHELL -l}
+$CHROOT_CMD $ROOT ${*:-$SHELL -l}
 
 cleanup
