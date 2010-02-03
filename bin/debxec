@@ -16,6 +16,14 @@ MYSELF="$(realpath $0)"
 
 PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/system/xbin/bb:/data/local/bin"
 
+CHROOT="chroot"
+
+# source config files
+CONF_FILES="/data/local/etc/debxec.defaults /system/sd/debxec.defaults $HOME/.debxec.defaults"
+for F in $CONF_FILES; do
+    [ -e "$F" ] && . "$F"
+done
+
 mounted() {
   awk -vDIR=$1 '$2 == DIR { MOUNTED=1;} END {exit ! MOUNTED;}' /proc/mounts
 }
@@ -133,6 +141,6 @@ HOME=/root
 export SHELL
 export HOME
 
-chroot $DEB ${*:-$SHELL -l}
+$CHROOT $DEB ${*:-$SHELL -l}
 
 cleanup
