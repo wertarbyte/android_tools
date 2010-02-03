@@ -47,20 +47,32 @@ no_apps_running() {
   return 0
 }
 
-# mount essential file systems into the chroot
-mounted $DEB/proc    || mount proc -t proc $DEB/proc
-mounted $DEB/sys     || mount sysfs -t sysfs $DEB/sys
-mounted $DEB/dev     || mount --rbind /dev $DEB/dev
-mounted $DEB/dev/pts || mount devpts -t devpts $DEB/dev/pts
+build_chroot() {
+    # mount essential file systems into the chroot
+    mounted $DEB/proc    || mount proc -t proc $DEB/proc
+    mounted $DEB/sys     || mount sysfs -t sysfs $DEB/sys
+    mounted $DEB/dev     || mount --rbind /dev $DEB/dev
+    mounted $DEB/dev/pts || mount devpts -t devpts $DEB/dev/pts
+    # bind mount custom directories
+    if [ -e "$BINDTAB" ]; then
+      # remove comments
+      sed 's!#.*$!!;/^[[:space:]]*$/d;' "$BINDTAB" | \
+      while read SRC DST; do
+        mounted ${DEV}${DST} || mount --rbind "$SRC" "${DEB}${DST}"
+      done
+    fi
+}
 
-# bind mount custom directories
-if [ -e "$BINDTAB" ]; then
-  # remove comments
-  sed 's!#.*$!!;/^[[:space:]]*$/d;' "$BINDTAB" | \
-  while read SRC DST; do
-    mounted ${DEV}${DST} || mount --rbind "$SRC" "${DEB}${DST}"
-  done
-fi
+teardown_chroot() {
+    # unmount all file systems beneath the chroot
+    tac /proc/mounts | while read DEV DIR FS OPTS X Y; do
+        if is_subdir "$DIR" "$DEB"; then
+            umount "$DIR"
+        fi
+    done
+}
+
+build_chroot
 
 # activate swap if specified
 [ -e "$SWAPFILE" ] && \
@@ -74,7 +86,9 @@ export HOME
 
 chroot $DEB ${*:-$SHELL -l}
 
-# deactivate swap if no apps left
-swap_active "$SWAPFILE" && \
-  no_apps_running && \
-  swapoff "$SWAPFILE"
+# deactivate swap and unmount if no apps left
+if no_apps_running; then
+    swap_active "$SWAPFILE" && \
+        swapoff "$SWAPFILE"
+    teardown_chroot
+fi
