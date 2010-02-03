@@ -8,6 +8,12 @@ SWAPFILE=/system/sd/swapfile
 # configuration file with directories to bind-mount into the chroot
 BINDTAB=/system/sd/bindtab
 
+# put all chroot processes into a process group
+CGROUP="debxec"
+CGROUP_DIR="/dev/cpuctl"
+
+MYSELF="$(realpath $0)"
+
 PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/system/xbin/bb:/data/local/bin"
 
 mounted() {
@@ -72,6 +78,23 @@ teardown_chroot() {
     done
 }
 
+enter_cgroup() {
+    # enter process group
+    if mounted "${CGROUP_DIR}"; then
+        local MYGROUP="${CGROUP_DIR}/$CGROUP"
+        # create group if it does not exist
+        [ -d "$MYGROUP" ] || mkdir "$MYGROUP"
+        echo $$ > "$MYGROUP/tasks"
+        echo 1 > "$MYGROUP/notify_on_release"
+        # install cleanup handler
+        if [ -x "$MYSELF" ]; then
+            echo $MYSELF > "${CGROUP_DIR}/release_agent"
+        fi
+    else
+        echo "Unable to enter process group, ${CGROUP_DIR} not mounted" >&2
+    fi
+}
+
 cleanup() {
     # deactivate swap and unmount if no apps left
     if no_apps_running; then
@@ -86,12 +109,24 @@ if [ "$1" = "--cleanup" ]; then
     exit $?
 fi
 
+# if we are called with our process group name
+# as the only argument, we should start cleaning up
+log "debxec: $*"
+if [ "$1" = "/$CGROUP" ] && [ ! -e "$DEB/$1" ]; then
+    log "Cleaning up debian chroot"
+    cleanup
+    exit $?
+fi
+
 build_chroot
 
 # activate swap if specified
 [ -e "$SWAPFILE" ] && \
   ! swap_active "$SWAPFILE" && \
   swapon "$SWAPFILE"
+
+# enter process group
+enter_cgroup
 
 SHELL=/bin/bash
 HOME=/root
