@@ -58,7 +58,7 @@ build_chroot() {
       # remove comments
       sed 's!#.*$!!;/^[[:space:]]*$/d;' "$BINDTAB" | \
       while read SRC DST; do
-        mounted ${DEV}${DST} || mount --rbind "$SRC" "${DEB}${DST}"
+        mounted ${DEB}${DST} || mount --rbind "$SRC" "${DEB}${DST}"
       done
     fi
 }
