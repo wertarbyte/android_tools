@@ -72,6 +72,20 @@ teardown_chroot() {
     done
 }
 
+cleanup() {
+    # deactivate swap and unmount if no apps left
+    if no_apps_running; then
+        swap_active "$SWAPFILE" && \
+            swapoff "$SWAPFILE"
+        teardown_chroot
+    fi
+}
+
+if [ "$1" = "--cleanup" ]; then
+    cleanup
+    exit $?
+fi
+
 build_chroot
 
 # activate swap if specified
@@ -86,9 +100,4 @@ export HOME
 
 chroot $DEB ${*:-$SHELL -l}
 
-# deactivate swap and unmount if no apps left
-if no_apps_running; then
-    swap_active "$SWAPFILE" && \
-        swapoff "$SWAPFILE"
-    teardown_chroot
-fi
+cleanup
