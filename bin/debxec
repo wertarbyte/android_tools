@@ -4,10 +4,10 @@
 
 ## default configuration values, changable via config file
 # location of (debian) chroot (without trailing /)
-ROOT=/system/sd/debian
-SWAP=/system/sd/swapfile
+ROOT=/sd-ext/debian
+SWAP=/sd-ext/swapfile
 # configuration file with directories to bind-mount into the chroot
-BINDTAB=/system/sd/bindtab
+BINDTAB=/sd-ext/bindtab
 
 # put all chroot processes into a process group
 CGROUP_NAME="debxec"
@@ -22,7 +22,7 @@ PATH="/usr/bin:/usr/sbin:/bin:/sbin:/system/sbin:/system/bin:/system/xbin:/syste
 CHROOT_CMD="chroot"
 
 # source config files
-CONF_FILES="/data/local/etc/debxec.defaults /system/sd/debxec.defaults $HOME/.debxec.defaults"
+CONF_FILES="/data/local/etc/debxec.defaults /sd-ext/debxec.defaults $HOME/.debxec.defaults"
 for F in $CONF_FILES; do
     [ -e "$F" ] && . "$F"
 done
